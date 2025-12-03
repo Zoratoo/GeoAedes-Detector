@@ -5,7 +5,7 @@ cd "Caminho\Para\Sua\Pasta\Projeto"
 py -3.11 -m venv .venv
 
 # 3. Ative o ambiente
-.\.venv\Scripactivatets\
+.\.venv\Scripts\activate
 
 # 4. Instale todas as bibliotecas necessárias
 pip install customtkinter ultralytics torch tensorflow opencv-contrib-python pillow numpy

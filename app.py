@@ -441,41 +441,96 @@ class ObjectDetectorApp(ctk.CTk):
             self.add_to_log("AVISO: Nenhum ponto detectado para gerar o mapa.")
             messagebox.showwarning("Geração de KML", "Nenhum ponto de detecção foi salvo para gerar o arquivo de mapa.")
             return
+        
+        # Mapeamento de cores para KML (AABBGGRR format) - Cores otimizadas para objetos mais frequentes
+        color_mapping = {
+            'plastic_bottle': 'FF0000FF',  # Vermelho puro - Muito visível
+            'tire': 'FF00FF00',  # Verde puro
+            'can': 'FFFF0000',  # Azul puro
+            'open_container': 'FF00CCFF',  # Amarelo brilhante - Muito contrastante
+            'garbage_bag': 'FF0080FF',  # Laranja - Muito visível
+            'sofa': 'FF808000',  # Ciano/Azul
+            'plastic_bag': 'FFFF00FF'  # Magenta brilhante - Muito contrastante
+        }
+        
+        # Agrupar pontos por classe
+        points_by_class = {}
+        for point in self.detected_points:
+            class_name = point['class_name']
+            if class_name not in points_by_class:
+                points_by_class[class_name] = []
+            points_by_class[class_name].append(point)
+        
+        # Iniciar documento KML
         kml_content = """<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
     <name>Pontos de Detecção de Objetos</name>
     <Description>Objetos acumuladores de água detectados pelo sistema de visão computacional.</Description>
+
 """
-        for point in self.detected_points:
-            class_name = point['class_name'].replace('_', ' ').title()
-            gps_info = point['gps_data']
-            timestamp = gps_info['timestamp'].strftime('%d/%m/%Y %H:%M:%S')
-            kml_content += f"""
-    <Placemark>
-      <name>{class_name}</name>
-      <description>
-        <![CDATA[
-          <b>Objeto:</b> {class_name}<br/>
-          <b>Data/Hora:</b> {timestamp}<br/>
-          <b>Latitude:</b> {gps_info['lat']}<br/>
-          <b>Longitude:</b> {gps_info['lon']}<br/>
-          <b>Altitude:</b> {gps_info['alt']:.2f} m
-        ]]>
-      </description>
-      <Point>
-        <coordinates>{gps_info['lon']},{gps_info['lat']},{gps_info['alt']}</coordinates>
-      </Point>
-    </Placemark>
+        
+        # Adicionar estilos para cada classe
+        for class_name in points_by_class.keys():
+            style_name = class_name.replace('_', ' ').title().replace(' ', '_')
+            color = color_mapping.get(class_name, 'FFFFFFFF')
+            kml_content += f"""    <Style id="style_{style_name}">
+      <IconStyle>
+        <color>{color}</color>
+        <scale>1.2</scale>
+        <Icon>
+          <href>http://maps.google.com/mapfiles/kml/paddle/wht-blank.png</href>
+        </Icon>
+      </IconStyle>
+      <LabelStyle>
+        <scale>0</scale>
+      </LabelStyle>
+    </Style>
 """
-        kml_content += """
-  </Document>
+        
+        # Adicionar folders para cada classe
+        for class_name, points in points_by_class.items():
+            class_title = class_name.replace('_', ' ').title()
+            style_name = class_title.replace(' ', '_')
+            kml_content += f"""    <Folder>
+      <name>{class_title} ({len(points)})</name>
+      <open>1</open>
+"""
+            
+            # Adicionar placemarks para cada ponto
+            for point in points:
+                gps_info = point['gps_data']
+                timestamp = gps_info['timestamp'].strftime('%d/%m/%Y %H:%M:%S')
+                kml_content += f"""      <Placemark>
+        <name>{class_title}</name>
+        <description>
+        
+          &lt;b&gt;Objeto:&lt;/b&gt; {class_title}&lt;br/&gt;
+          &lt;b&gt;Data/Hora:&lt;/b&gt; {timestamp}&lt;br/&gt;
+          &lt;b&gt;Latitude:&lt;/b&gt; {gps_info['lat']}&lt;br/&gt;
+          &lt;b&gt;Longitude:&lt;/b&gt; {gps_info['lon']}&lt;br/&gt;
+          &lt;b&gt;Altitude:&lt;/b&gt; {gps_info['alt']:.2f} m
+        
+        </description>
+        <Point>
+          <coordinates>{gps_info['lon']},{gps_info['lat']},{gps_info['alt']}</coordinates>
+        </Point>
+        <styleUrl>#style_{style_name}</styleUrl>
+      </Placemark>
+
+"""
+            
+            kml_content += "    </Folder>"
+        
+        kml_content += """  </Document>
 </kml>
 """
+        
         file_path = filedialog.asksaveasfilename(defaultextension=".kml", filetypes=[("Google Earth KML", "*.kml")], title="Salvar arquivo de mapa KML")
         if file_path:
             try:
-                with open(file_path, 'w', encoding='utf-8') as f: f.write(kml_content)
+                with open(file_path, 'w', encoding='utf-8') as f: 
+                    f.write(kml_content)
                 self.add_to_log(f"INFO: Mapa KML salvo com sucesso em: {os.path.basename(file_path)}")
                 messagebox.showinfo("Sucesso", "Arquivo de mapa KML gerado e salvo com sucesso!")
             except Exception as e:
